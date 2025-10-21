@@ -1,0 +1,5 @@
+:root { font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif; }
+body { margin: 0; }
+.container { padding: 16px; }
+.toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.muted { color: #666; font-size: 12px; margin-left: 8px; }
