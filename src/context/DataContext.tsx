@@ -10,25 +10,71 @@ import {
 } from "../types";
 import { diffById } from "./diff";
 
-// —————————————————————— Helpers
-function cloneTasks(ts: Task[]): Task[] {
-  return ts.map((t) => ({
-    ...t,
-    // sicherstellen, dass Dates echte Dates bleiben
-    start: new Date(t.start),
-    end: new Date(t.end),
-  }));
+/* ============================ Normalisierung ============================ */
+/** Hilfsfunktionen, die IDs/Referenzen als Strings normalisieren,
+    Dates korrekt klonen und damit E1046 vermeiden. */
+
+function toStr(
+  v: string | number | null | undefined
+): string | null | undefined {
+  if (v === null || v === undefined) return v;
+  return String(v);
 }
 
-function deepClone(data: GanttData): GanttData {
+function cloneTask(t: Task): Task {
   return {
-    tasks: cloneTasks(data.tasks),
-    dependencies: data.dependencies.map((d) => ({ ...d })),
-    resources: data.resources.map((r) => ({ ...r })),
-    resourceAssignments: data.resourceAssignments.map((ra) => ({ ...ra })),
+    ...t,
+    id: String(t.id),
+    // parentId: 0 kennzeichnet Root — das lassen wir als 0 stehen.
+    // Alle anderen Parent-IDs in Strings konvertieren.
+    parentId:
+      t.parentId === 0 || t.parentId === null || t.parentId === undefined
+        ? t.parentId
+        : String(t.parentId),
+    title: t.title,
+    start: new Date(t.start),
+    end: new Date(t.end),
+    progress: t.progress,
   };
 }
 
+function cloneDependency(d: Dependency): Dependency {
+  return {
+    ...d,
+    id: String(d.id),
+    predecessorId: String(d.predecessorId),
+    successorId: String(d.successorId),
+    type: d.type,
+  };
+}
+
+function cloneResource(r: Resource): Resource {
+  return {
+    ...r,
+    id: String(r.id),
+    text: r.text,
+  };
+}
+
+function cloneAssignment(a: ResourceAssignment): ResourceAssignment {
+  return {
+    ...a,
+    id: String(a.id), // <- "0" ist truthy, kein E1046 mehr
+    taskId: String(a.taskId),
+    resourceId: String(a.resourceId),
+  };
+}
+
+function normalize(data: GanttData): GanttData {
+  return {
+    tasks: data.tasks.map(cloneTask),
+    dependencies: data.dependencies.map(cloneDependency),
+    resources: data.resources.map(cloneResource),
+    resourceAssignments: data.resourceAssignments.map(cloneAssignment),
+  };
+}
+
+/* =============================== Diff ================================== */
 function computeDiff(initial: GanttData, updated: GanttData): FullDiff {
   return {
     tasks: diffById(initial.tasks, updated.tasks),
@@ -41,7 +87,7 @@ function computeDiff(initial: GanttData, updated: GanttData): FullDiff {
   };
 }
 
-// —————————————————————— Actions/State
+/* ============================= Actions/State ============================ */
 export type Action =
   | { type: "reset" }
   | { type: "setAll"; payload: GanttData }
@@ -63,45 +109,35 @@ export type DataState = {
   diff: FullDiff;
 };
 
-// —————————————————————— Reducer
+/* ============================== Reducer ================================= */
 function reducer(state: DataState, action: Action): DataState {
   switch (action.type) {
     case "reset": {
-      const updated = deepClone(state.initial);
+      const updated = normalize(state.initial);
       return {
         initial: state.initial,
         updated,
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "setAll": {
-      const updated = deepClone(action.payload);
+      const updated = normalize(action.payload);
       return {
         initial: state.initial,
         updated,
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "upsertTask": {
-      const exists = state.updated.tasks.some(
-        (t) => t.id === action.payload.id
-      );
+      const payload = cloneTask(action.payload);
+      const exists = state.updated.tasks.some((t) => t.id === payload.id);
       const tasks = exists
         ? state.updated.tasks.map((t) =>
-            t.id === action.payload.id ? { ...t, ...action.payload } : t
+            t.id === payload.id ? { ...t, ...payload } : t
           )
-        : [...state.updated.tasks, action.payload];
-      const updated = { ...state.updated, tasks: cloneTasks(tasks) };
-      return {
-        initial: state.initial,
-        updated,
-        diff: computeDiff(state.initial, updated),
-      };
-    }
-    case "removeTask": {
-      const tasks = state.updated.tasks.filter(
-        (t) => t.id !== action.payload.id
-      );
+        : [...state.updated.tasks, payload];
       const updated = { ...state.updated, tasks };
       return {
         initial: state.initial,
@@ -109,15 +145,28 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
+    case "removeTask": {
+      const id = String(action.payload.id);
+      const tasks = state.updated.tasks.filter((t) => t.id !== id);
+      const updated = { ...state.updated, tasks };
+      return {
+        initial: state.initial,
+        updated,
+        diff: computeDiff(state.initial, updated),
+      };
+    }
+
     case "upsertDependency": {
+      const payload = cloneDependency(action.payload);
       const exists = state.updated.dependencies.some(
-        (l) => l.id === action.payload.id
+        (l) => l.id === payload.id
       );
       const dependencies = exists
         ? state.updated.dependencies.map((l) =>
-            l.id === action.payload.id ? { ...l, ...action.payload } : l
+            l.id === payload.id ? { ...l, ...payload } : l
           )
-        : [...state.updated.dependencies, action.payload];
+        : [...state.updated.dependencies, payload];
       const updated = { ...state.updated, dependencies };
       return {
         initial: state.initial,
@@ -125,9 +174,11 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "removeDependency": {
+      const id = String(action.payload.id);
       const dependencies = state.updated.dependencies.filter(
-        (l) => l.id !== action.payload.id
+        (l) => l.id !== id
       );
       const updated = { ...state.updated, dependencies };
       return {
@@ -136,15 +187,15 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "upsertResource": {
-      const exists = state.updated.resources.some(
-        (r) => r.id === action.payload.id
-      );
+      const payload = cloneResource(action.payload);
+      const exists = state.updated.resources.some((r) => r.id === payload.id);
       const resources = exists
         ? state.updated.resources.map((r) =>
-            r.id === action.payload.id ? { ...r, ...action.payload } : r
+            r.id === payload.id ? { ...r, ...payload } : r
           )
-        : [...state.updated.resources, action.payload];
+        : [...state.updated.resources, payload];
       const updated = { ...state.updated, resources };
       return {
         initial: state.initial,
@@ -152,10 +203,10 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "removeResource": {
-      const resources = state.updated.resources.filter(
-        (r) => r.id !== action.payload.id
-      );
+      const id = String(action.payload.id);
+      const resources = state.updated.resources.filter((r) => r.id !== id);
       const updated = { ...state.updated, resources };
       return {
         initial: state.initial,
@@ -163,15 +214,17 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "upsertResourceAssignment": {
+      const payload = cloneAssignment(action.payload);
       const exists = state.updated.resourceAssignments.some(
-        (ra) => ra.id === action.payload.id
+        (ra) => ra.id === payload.id
       );
       const resourceAssignments = exists
         ? state.updated.resourceAssignments.map((ra) =>
-            ra.id === action.payload.id ? { ...ra, ...action.payload } : ra
+            ra.id === payload.id ? { ...ra, ...payload } : ra
           )
-        : [...state.updated.resourceAssignments, action.payload];
+        : [...state.updated.resourceAssignments, payload];
       const updated = { ...state.updated, resourceAssignments };
       return {
         initial: state.initial,
@@ -179,9 +232,11 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
     case "removeResourceAssignment": {
+      const id = String(action.payload.id);
       const resourceAssignments = state.updated.resourceAssignments.filter(
-        (ra) => ra.id !== action.payload.id
+        (ra) => ra.id !== id
       );
       const updated = { ...state.updated, resourceAssignments };
       return {
@@ -190,12 +245,13 @@ function reducer(state: DataState, action: Action): DataState {
         diff: computeDiff(state.initial, updated),
       };
     }
+
     default:
       return state;
   }
 }
 
-// —————————————————————— Context
+/* =============================== Context ================================ */
 const DataContext = createContext<{
   state: DataState;
   dispatch: React.Dispatch<Action>;
@@ -209,8 +265,9 @@ export function DataProvider({
   children: React.ReactNode;
 }) {
   const initialState: DataState = useMemo(() => {
-    const init = deepClone(initialData);
-    const updated = deepClone(initialData);
+    // initial & updated werden getrennt, aber beide normalisiert
+    const init = normalize(initialData);
+    const updated = normalize(initialData);
     return { initial: init, updated, diff: computeDiff(init, updated) };
   }, [initialData]);
 
