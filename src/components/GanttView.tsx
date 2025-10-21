@@ -11,7 +11,6 @@ import Gantt, {
 import { useData } from "../context/DataContext";
 import { Task, Dependency, ResourceAssignment } from "../types";
 
-// Defensive Extractors – Event-Payloads variieren leicht je nach Aktion/Version
 function getTaskFromEvent(e: any): Task | null {
   return (e?.values || e?.newData || e?.taskData || null) as Task | null;
 }
@@ -25,10 +24,14 @@ function getAssignmentFromEvent(e: any): ResourceAssignment | null {
     null) as ResourceAssignment | null;
 }
 
-export default function GanttView() {
+export default function GanttView({
+  showResources,
+}: {
+  showResources: boolean;
+}) {
   const { state, dispatch } = useData();
 
-  // ——— Tasks
+  // Tasks
   const onTaskInserted = useCallback(
     (e: any) => {
       const t = getTaskFromEvent(e);
@@ -54,7 +57,7 @@ export default function GanttView() {
     [dispatch]
   );
 
-  // ——— Dependencies (richtige Eventnamen!)
+  // Dependencies
   const onDependencyInserted = useCallback(
     (e: any) => {
       const d = getDependencyFromEvent(e);
@@ -72,7 +75,7 @@ export default function GanttView() {
     [dispatch]
   );
 
-  // ——— Resource Assignments
+  // Resource Assignments
   const onResourceAssigned = useCallback(
     (e: any) => {
       const a = getAssignmentFromEvent(e);
@@ -99,8 +102,11 @@ export default function GanttView() {
         onTaskDeleted={onTaskDeleted}
         onDependencyInserted={onDependencyInserted}
         onDependencyDeleted={onDependencyDeleted}
-        onResourceAssigned={onResourceAssigned}
-        onResourceUnassigned={onResourceUnassigned}
+        // Resource-Events nur verbinden, wenn sichtbar – ist optional
+        {...(showResources && {
+          onResourceAssigned,
+          onResourceUnassigned,
+        })}
       >
         {/* Aufgaben */}
         <Tasks
@@ -122,20 +128,22 @@ export default function GanttView() {
           typeExpr="type"
         />
 
-        {/* Ressourcen */}
-        <Resources
-          dataSource={state.updated.resources}
-          keyExpr="id"
-          textExpr="text"
-        />
-
-        {/* Ressourcenzuweisungen */}
-        <ResourceAssignments
-          dataSource={state.updated.resourceAssignments}
-          keyExpr="id"
-          taskIdExpr="taskId"
-          resourceIdExpr="resourceId"
-        />
+        {/* Ressourcen und Zuweisungen nur rendern, wenn gewünscht */}
+        {showResources && (
+          <>
+            <Resources
+              dataSource={state.updated.resources}
+              keyExpr="id"
+              textExpr="text"
+            />
+            <ResourceAssignments
+              dataSource={state.updated.resourceAssignments}
+              keyExpr="id"
+              taskIdExpr="taskId"
+              resourceIdExpr="resourceId"
+            />
+          </>
+        )}
 
         <Editing
           enabled={true}
@@ -144,8 +152,9 @@ export default function GanttView() {
           allowTaskUpdating={true}
           allowDependencyAdding={true}
           allowDependencyDeleting={true}
-          allowResourceAdding={true}
-          allowResourceDeleting={true}
+          // Ressourcen-Editing nur erlauben, wenn Ressourcen sichtbar sind
+          allowResourceAdding={showResources}
+          allowResourceDeleting={showResources}
         />
 
         <Column dataField="title" caption="Titel" width={220} />

@@ -7,7 +7,12 @@ import {
   Divider,
   Tooltip,
 } from "@fluentui/react-components";
-import { ArrowResetRegular, DataTrendingRegular } from "@fluentui/react-icons";
+import {
+  ArrowResetRegular,
+  DataTrendingRegular,
+  EyeRegular,
+  EyeOffRegular,
+} from "@fluentui/react-icons";
 import GanttView from "./components/GanttView";
 import { DataProvider, useData } from "./context/DataContext";
 import { initialSeed } from "./data/seed";
@@ -21,7 +26,15 @@ import "./styles.css";
 
 import { initDevExtremeLocalization, DxLang } from "./localization/devextreme";
 
-function Toolbar({ onLangChanged }: { onLangChanged: (lang: DxLang) => void }) {
+function Toolbar({
+  onLangChanged,
+  showResources,
+  onToggleResources,
+}: {
+  onLangChanged: (lang: DxLang) => void;
+  showResources: boolean;
+  onToggleResources: () => void;
+}) {
   const { state, dispatch } = useData();
   const changesCount =
     state.diff.tasks.added.length +
@@ -63,7 +76,23 @@ function Toolbar({ onLangChanged }: { onLangChanged: (lang: DxLang) => void }) {
         </Button>
       </Tooltip>
 
-      <span className="muted">
+      <Divider vertical style={{ margin: "0 12px" }} />
+
+      <Tooltip
+        content={
+          showResources ? "Ressourcen ausblenden" : "Ressourcen einblenden"
+        }
+        relationship="label"
+      >
+        <Button
+          icon={showResources ? <EyeOffRegular /> : <EyeRegular />}
+          onClick={onToggleResources}
+        >
+          {showResources ? "Ressourcen aus" : "Ressourcen an"}
+        </Button>
+      </Tooltip>
+
+      <span className="muted" style={{ marginLeft: 8 }}>
         {hasChanges ? `Änderungen: ${changesCount}` : "Keine Änderungen"}
       </span>
 
@@ -76,7 +105,7 @@ function Toolbar({ onLangChanged }: { onLangChanged: (lang: DxLang) => void }) {
 }
 
 export default function App() {
-  // Sprache aus LS oder Browser ableiten
+  // Sprache initialisieren (DevExtreme-Localization)
   const [lang, setLang] = React.useState<DxLang>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("lang") as DxLang | null;
@@ -87,35 +116,38 @@ export default function App() {
   });
 
   React.useEffect(() => {
-    // Beispiel-Overrides (optional, anpassbar oder löschen)
     const overrides = {
       de: {
-        // "dxCollectionWidget-noDataText": "Keine Daten verfügbar",
+        // optional: eigene Überschreibungen hier eintragen
       },
       en: {
-        // "dxCollectionWidget-noDataText": "No data available",
+        // optional: eigene Überschreibungen hier eintragen
       },
     } as const;
 
     initDevExtremeLocalization(lang, overrides as any);
-  }, []); // nur einmal initialisieren
+  }, []); // einmalig beim Mount
 
   const handleLangChanged = (l: DxLang) => {
     setLang(l);
-    // setDevExtremeLocale wird im Switcher schon aufgerufen;
-    // hier reicht das Re-Render erzwingen:
   };
+
+  // Sichtbarkeit der Ressourcen (Resources + ResourceAssignments)
+  const [showResources, setShowResources] = React.useState<boolean>(true);
+  const toggleResources = () => setShowResources((s) => !s);
 
   return (
     <FluentProvider theme={webLightTheme}>
       <DataProvider initialData={initialSeed}>
-        <div
-          className="container"
-          key={lang /* force rerender on language change */}
-        >
+        {/* key={lang} erzwingt Re-Mount bei Sprachwechsel */}
+        <div className="container" key={lang}>
           <h1>DevExtreme Gantt – React 18 + TS + Fluent UI</h1>
-          <Toolbar onLangChanged={handleLangChanged} />
-          <GanttView />
+          <Toolbar
+            onLangChanged={handleLangChanged}
+            showResources={showResources}
+            onToggleResources={toggleResources}
+          />
+          <GanttView showResources={showResources} />
         </div>
       </DataProvider>
     </FluentProvider>
