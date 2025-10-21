@@ -1,3 +1,4 @@
+// src/App.tsx
 import React from "react";
 import {
   FluentProvider,
@@ -10,21 +11,30 @@ import { ArrowResetRegular, DataTrendingRegular } from "@fluentui/react-icons";
 import GanttView from "./components/GanttView";
 import { DataProvider, useData } from "./context/DataContext";
 import { initialSeed } from "./data/seed";
-import "devextreme/dist/css/dx.light.css";
-import "./styles.css";
+
+// WICHTIG: beide CSS-Imports
 import "devextreme/dist/css/dx.light.css";
 import "devexpress-gantt/dist/dx-gantt.css";
 
+import "./styles.css";
+
 function Toolbar() {
   const { state, dispatch } = useData();
-  const hasChanges =
+  const changesCount =
     state.diff.tasks.added.length +
-      state.diff.tasks.removed.length +
-      state.diff.tasks.changed.length +
-      state.diff.links.added.length +
-      state.diff.links.removed.length +
-      state.diff.links.changed.length >
-    0;
+    state.diff.tasks.removed.length +
+    state.diff.tasks.changed.length +
+    state.diff.dependencies.added.length +
+    state.diff.dependencies.removed.length +
+    state.diff.dependencies.changed.length +
+    state.diff.resources.added.length +
+    state.diff.resources.removed.length +
+    state.diff.resources.changed.length +
+    state.diff.resourceAssignments.added.length +
+    state.diff.resourceAssignments.removed.length +
+    state.diff.resourceAssignments.changed.length;
+
+  const hasChanges = changesCount > 0;
 
   return (
     <div className="toolbar">
@@ -51,7 +61,7 @@ function Toolbar() {
       </Tooltip>
 
       <span className="muted">
-        {hasChanges ? "Änderungen vorhanden" : "Keine Änderungen"}
+        {hasChanges ? `Änderungen: ${changesCount}` : "Keine Änderungen"}
       </span>
     </div>
   );

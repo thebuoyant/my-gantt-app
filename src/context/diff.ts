@@ -1,6 +1,10 @@
+// src/context/diff.ts
 import { DiffResult } from "../types";
 
-export function diffById<T extends { id: string | number }>(before: T[], after: T[]): DiffResult<T> {
+export function diffById<T extends { id: string | number }>(
+  before: T[],
+  after: T[]
+): DiffResult<T> {
   const beforeMap = new Map(before.map((x) => [x.id, x] as const));
   const afterMap = new Map(after.map((x) => [x.id, x] as const));
 
@@ -16,6 +20,7 @@ export function diffById<T extends { id: string | number }>(before: T[], after: 
     if (!b) {
       added.push(a);
     } else {
+      // flacher Vergleich – reicht hier
       const bJson = JSON.stringify(b);
       const aJson = JSON.stringify(a);
       if (bJson !== aJson) changed.push({ before: b, after: a });
